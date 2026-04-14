@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.15)
+project(PlantSim)
+
+add_library(PlantSim SHARED
+    GenerateFlora.cpp
+)
+
+target_include_directories(PlantSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
