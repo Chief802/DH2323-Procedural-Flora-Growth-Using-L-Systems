@@ -16,6 +16,7 @@ struct TurtleState {
 std::string ApplyRules(const std::string& sentence) {
     std::string newSentence;
     for (char c : sentence) {
+        // If you see an F, replace with the following
         if (c == 'F') newSentence += "F[+F]F[-F]F";
         else newSentence += c;
     }
@@ -39,14 +40,17 @@ int Interpret(
     Segment* outSegments,
     int maxSegments
 ) {
+    // Angle in radians from input degrees
     float angleRad = angleDeg * 3.1415926f / 180.0f;
 
+    // Starting state: facing upwards
     TurtleState turtle = {0, 0, 0, 3.1415926f / 2.0f};
     std::stack<TurtleState> stack;
 
     int segmentCount = 0;
 
     for (char c : commands) {
+        // The following happens when encountering an "F"
         if (c == 'F') {
             float newX = turtle.x + step * cos(turtle.angle);
             float newY = turtle.y + step * sin(turtle.angle);
@@ -61,15 +65,19 @@ int Interpret(
             turtle.x = newX;
             turtle.y = newY;
         }
+        // Rotate to the "left"
         else if (c == '+') {
             turtle.angle += angleRad;
         }
+        // Rotate to the "right"
         else if (c == '-') {
             turtle.angle -= angleRad;
         }
+        // Start a new branch
         else if (c == '[') {
             stack.push(turtle);
         }
+        // End the current branch and return to the location of the [ call
         else if (c == ']') {
             if (!stack.empty()) {
                 turtle = stack.top();
