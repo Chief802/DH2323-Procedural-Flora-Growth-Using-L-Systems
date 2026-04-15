@@ -1,5 +1,5 @@
 #define PLANTSIM_EXPORTS
-#include "GenerateFlora.h"
+#include "GenerateFlora2D.h"
 #include <string>
 
 #include <vector>

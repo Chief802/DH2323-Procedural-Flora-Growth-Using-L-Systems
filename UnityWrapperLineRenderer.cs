@@ -21,7 +21,7 @@ public class PlantBridge : MonoBehaviour
 
     // Initial Conditions
     public string axiom = "F";
-    public int iterations = 1;
+    public int iterations = 0;
     public float angle = 25f;
     public float step = 0.5f;
     private LineRenderer lr;
@@ -91,32 +91,30 @@ public class PlantBridge : MonoBehaviour
         if (segments == null || count == 0 || Camera.main == null)
             return;
 
-        // Compute 3D bounds of the object
+        // Compute bounds of plant
         Bounds bounds = new Bounds(ToUnityVector(segments[0].a), Vector3.zero);
+
         for (int i = 0; i < count; i++)
         {
             bounds.Encapsulate(ToUnityVector(segments[i].a));
             bounds.Encapsulate(ToUnityVector(segments[i].b));
         }
 
-        // Calculate necessary distance based on FOV
-        // Use the largest dimension 
-        float objectSize = bounds.size.magnitude; 
-        float fov = Camera.main.fieldOfView;
+        // Center camera on plant
+        Camera.main.transform.position = new Vector3(
+            bounds.center.x,
+            bounds.center.y,
+            Camera.main.transform.position.z
+        );
+
+        // Adjust zoom
         float padding = 1.2f;
 
-        // Trigonometry: distance = (size / 2) / tan(fov / 2)
-        float distance = (objectSize * 0.5f * padding) / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+        float sizeX = bounds.size.x;
+        float sizeY = bounds.size.y;
 
-        // Position the camera
-        // Center on X and Y, then back away on Z
-        Vector3 newPosition = bounds.center;
-        newPosition.z -= distance; 
-
-        Camera.main.transform.position = newPosition;
-        
-        // Ensure camera is looking at the center
-        Camera.main.transform.LookAt(bounds.center);
+        Camera.main.orthographicSize =
+            Mathf.Max(sizeX, sizeY) * 0.5f * padding;
     }
 
     // Helper function for converting the PlantBridge class vector to a vector understandable by Unity
