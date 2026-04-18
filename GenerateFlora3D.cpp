@@ -13,6 +13,7 @@ struct TurtleState {
     Vec3 U; // Direction up
     Vec3 L; // Direction to the left
     Vec3 H; // Heading
+    float radius;    // Branch radius
 };
 
 std::string ApplyRules(const std::string& sentence) {
@@ -26,7 +27,7 @@ std::string ApplyRules(const std::string& sentence) {
             Branch: Pitch down, roll right, and go forward
             Turn right
         */
-        if (c == 'F') newSentence += "F[&+F][^\\F&&][&/F]-";
+        if (c == 'F') newSentence += "F[+&F]F[-/F]F";
         else newSentence += c;
     }
     return newSentence;
@@ -114,9 +115,10 @@ int Interpret(
     // Initial state: Position at origin, H pointing Up (Y-axis), U pointing Forward (Z-axis)
     TurtleState turtle = {
         {0, 0, 0},      // Position
-        {0, 1, 0},      // H (Heading)
+        {0, 0, -1},      // U (Up)
         {-1, 0, 0},     // L (Left)
-        {0, 0, 1}       // U (Up)
+        {0, 1, 0},      // H (Heading)
+        0.2f            // Branch radius
     };
 
     std::stack<TurtleState> stack;
@@ -132,7 +134,7 @@ int Interpret(
             };
 
             if (segmentCount < maxSegments) {
-                outSegments[segmentCount++] = { turtle.pos, newPos };
+                outSegments[segmentCount++] = { turtle.pos, newPos, turtle.radius };
             }
             turtle.pos = newPos;
         }
@@ -142,8 +144,11 @@ int Interpret(
         else if (c == '^') RotateTurtle(turtle, '&', -angleRad);
         else if (c == '\\') RotateTurtle(turtle, '\\', angleRad);
         else if (c == '/') RotateTurtle(turtle, '\\', -angleRad);
-        else if (c == '|') RotateTurtle(turtle, '+', 3.1415926f); // 180 degrees
-        else if (c == '[') stack.push(turtle);
+        else if (c == '|') RotateTurtle(turtle, '+', 3.1415926f);
+        else if (c == '[') {
+            stack.push(turtle); 
+            turtle.radius *= 0.707;
+        }
         else if (c == ']') {
             if (!stack.empty()) {
                 turtle = stack.top();

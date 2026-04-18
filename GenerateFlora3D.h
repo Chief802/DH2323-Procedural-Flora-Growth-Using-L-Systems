@@ -15,6 +15,7 @@ struct Vec3 {
 struct Segment {
     Vec3 a;
     Vec3 b;
+    float radius;
 };
 
 PLANTSIM_API int GeneratePlantSegments(
