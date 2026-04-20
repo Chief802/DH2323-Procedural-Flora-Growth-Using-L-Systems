@@ -29,14 +29,14 @@ public class PlantBridge : MonoBehaviour
 
     [Header("3D Branch Settings")]
     public float baseRadius = 0.05f;
-    public int radialSegments = 8;
+    public int radialSegments = 12;
     public Material branchMaterial;
 
     private MeshFilter mf;
     private MeshRenderer mr;
 
+    private Vector3 lastTangent = Vector3.right;
 
-    // Required for Unity to understand the dll
     [DllImport("libPlantSim", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     private static extern int GeneratePlantSegments(
         string axiom,
@@ -71,7 +71,7 @@ public class PlantBridge : MonoBehaviour
         Generate();
     }
 
-    
+
     void Update()
     {
         bool spacePress = Keyboard.current.spaceKey.wasPressedThisFrame;
@@ -82,8 +82,6 @@ public class PlantBridge : MonoBehaviour
             Debug.Log($"Iteration: {iterations}");
             Generate();
         }
-        
-        MoveCamera();
     }
 
     void Generate()
@@ -111,8 +109,7 @@ public class PlantBridge : MonoBehaviour
             return;
         }
 
-       BuildBranchMesh(segments, count);
-        UpdateCamera(segments, count);
+        BuildBranchMesh(segments, count);
         Debug.Log($"Generated {count} segments");
     }
 
@@ -128,7 +125,11 @@ public class PlantBridge : MonoBehaviour
             Vector3 a = ToUnityVector(segments[i].a);
             Vector3 b = ToUnityVector(segments[i].b);
 
-            float radius = segments[i].radius * Mathf.Lerp(1f, 0.25f, i / (float)count);
+            float current = segments[i].radius;
+            float next = i < count - 1 ? segments[i + 1].radius : current;
+
+            float radius = Mathf.Lerp(current, next, 0.5f);
+            radius *= Mathf.Lerp(1f, 0.25f, i / (float)count);
 
             AddCylinder(
                 a,
@@ -148,14 +149,15 @@ public class PlantBridge : MonoBehaviour
 
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
-        mesh.SetNormals(normals);
+        mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
 
         mf.mesh = mesh;
     }
 
     // Adds a Cylinder
-      void AddCylinder(
+    void AddCylinder(
         Vector3 start,
         Vector3 end,
         float radius,
@@ -163,33 +165,39 @@ public class PlantBridge : MonoBehaviour
         List<Vector3> vertices,
         List<int> triangles,
         List<Vector3> normals)
+    {
+        int startIndex = vertices.Count;
+
+        Vector3 axis = (end - start).normalized;
+        float overlap = radius * 0.5f;
+        start -= axis * overlap;
+        end += axis * overlap;
+
+        Vector3 tangent = Vector3.Cross(lastTangent, axis);
+
+        if (tangent.sqrMagnitude < 0.001f)
+            tangent = Vector3.Cross(Vector3.up, axis);
+
+        tangent.Normalize();
+        lastTangent = tangent;
+
+        Vector3 bitangent = Vector3.Cross(axis, tangent).normalized;
+
+        for (int i = 0; i < sides; i++)
         {
-            int startIndex = vertices.Count;
+            float t = i / (float)sides * Mathf.PI * 2f;
 
-            Vector3 axis = (end - start).normalized;
+            Vector3 circle =
+                Mathf.Cos(t) * tangent * radius +
+                Mathf.Sin(t) * bitangent * radius;
 
-            Vector3 tangent =
-                Vector3.Cross(axis, Vector3.up).sqrMagnitude < 0.01f
-                ? Vector3.Cross(axis, Vector3.right).normalized
-                : Vector3.Cross(axis, Vector3.up).normalized;
+            vertices.Add(start + circle);
+            vertices.Add(end + circle);
 
-            Vector3 bitangent = Vector3.Cross(axis, tangent).normalized;
-
-            for (int i = 0; i < sides; i++)
-            {
-                float t = i / (float)sides * Mathf.PI * 2f;
-
-                Vector3 circle =
-                    Mathf.Cos(t) * tangent * radius +
-                    Mathf.Sin(t) * bitangent * radius;
-
-                vertices.Add(start + circle);
-                vertices.Add(end + circle);
-
-                Vector3 normal = circle.normalized;
-                normals.Add(normal);
-                normals.Add(normal);
-            }
+            Vector3 normal = circle.normalized;
+            normals.Add(normal);
+            normals.Add(normal);
+        }
 
         for (int i = 0; i < sides; i++)
         {
@@ -210,72 +218,8 @@ public class PlantBridge : MonoBehaviour
         }
     }
 
-    void UpdateCamera(Segment[] segments, int count)
-    {
-        if (Camera.main == null || count == 0)
-            return;
-
-        Bounds bounds = new Bounds(ToUnityVector(segments[0].a), Vector3.zero);
-
-        for (int i = 0; i < count; i++)
-        {
-            bounds.Encapsulate(ToUnityVector(segments[i].a));
-            bounds.Encapsulate(ToUnityVector(segments[i].b));
-        }
-
-        float size = bounds.size.magnitude;
-        float fov = Camera.main.fieldOfView;
-        float distance =
-            (size * 0.7f) /
-            Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-
-        Vector3 dir = new Vector3(1, 0.7f, -1).normalized;
-
-        Camera.main.transform.position =
-            bounds.center + dir * distance;
-
-        Camera.main.transform.LookAt(bounds.center);
-    }
-
-    void MoveCamera()
-    {
-        Vector3 direction = Vector3.zero;
-        float moveSpeed = 5f;
-
-        // Get input values
-        float moveForward = 0f;
-        float moveSideways = 0f;
-        float moveVertical = 0f;
-
-        if (Keyboard.current.wKey.isPressed) moveForward += 1;
-        if (Keyboard.current.sKey.isPressed) moveForward -= 1;
-        if (Keyboard.current.aKey.isPressed) moveSideways -= 1;
-        if (Keyboard.current.dKey.isPressed) moveSideways += 1;
-        if (Keyboard.current.eKey.isPressed) moveVertical += 1;
-        if (Keyboard.current.qKey.isPressed) moveVertical -= 1;
-
-        // Flatten the forward and right vectors so Y-rotation doesn't affect speed/direction
-        Vector3 forward = transform.forward;
-        Vector3 right = transform.right;
-        forward.y = 0;
-        right.y = 0;
-        forward.Normalize();
-        right.Normalize();
-
-        // Calculate final direction
-        direction = (forward * moveForward) + (right * moveSideways) + (Vector3.up * moveVertical);
-
-        // Check if direction is not zero to avoid console warnings with .normalized
-        if (direction.sqrMagnitude > 0.001f)
-        {
-            Camera.main.transform.position += direction.normalized * moveSpeed * Time.deltaTime;
-        }
-    }
-
-    // Helper function for converting the PlantBridge class vector to a vector understandable by Unity
     Vector3 ToUnityVector(PlantBridge.Vec3 v)
     {
         return new Vector3(v.x, v.y, v.z);
     }
-
 }
