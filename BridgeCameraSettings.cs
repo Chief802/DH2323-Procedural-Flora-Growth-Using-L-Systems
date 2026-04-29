@@ -85,7 +85,7 @@ public class CameraController : MonoBehaviour
             Camera.main.transform.position += direction.normalized * moveSpeed * Time.deltaTime;
         }
     }
-    Vector3 ToUnityVector(PlantBridge.Vec3 v)
+    Vector3 ToUnityVector(PlantRenderer.Vec3 v)
     {
         return new Vector3(v.x, v.y, v.z);
     }

@@ -20,6 +20,18 @@ public class PlantBridge : MonoBehaviour
         public Vec3 b;
         public float radius;
     }
+    private MeshFilter mf;
+    private MeshRenderer mr;
+
+    private Vector3 lastTangent = Vector3.right;
+    public enum TreeType
+    {
+        ParametricTree = 0,
+        StochasticShrub = 1,
+        HybridPlant = 2,
+        ABOPTree = 3
+
+}
 
     [Header("L-System")]
     public string axiom = "F";
@@ -32,21 +44,18 @@ public class PlantBridge : MonoBehaviour
     public int radialSegments = 12;
     public Material branchMaterial;
 
-    private MeshFilter mf;
-    private MeshRenderer mr;
+    [Header("Tree Type")]
+    public TreeType treeType;
+    public uint seed = 67;
 
-    private Vector3 lastTangent = Vector3.right;
-
-    [DllImport("libPlantSim", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-    private static extern int GeneratePlantSegments(
-        string axiom,
-        int iterations,
-        float angleDegrees,
-        float stepLength,
-        [Out] Segment[] outSegments,
-        int maxSegments
-    );
-
+[DllImport("libPlantSim", CallingConvention = CallingConvention.Cdecl)]
+private static extern int GeneratePlant(
+    int exampleId,
+    int iterations,
+    [Out] Segment[] outSegments,
+    int maxSegments,
+    uint seed
+);
     // When you press start in Unity, run Start()
     void Start()
     {
@@ -89,13 +98,12 @@ public class PlantBridge : MonoBehaviour
         const int MAX_SEGMENTS = 100000;
         Segment[] segments = new Segment[MAX_SEGMENTS];
 
-        int count = GeneratePlantSegments(
-            axiom,
+        int count = GeneratePlant(
+            (int)treeType,
             iterations,
-            angle,
-            step,
             segments,
-            MAX_SEGMENTS
+            MAX_SEGMENTS,
+            seed
         );
 
         if (count > MAX_SEGMENTS)
