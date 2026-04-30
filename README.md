@@ -5,7 +5,7 @@ This paper extends the methods for generating flora using L-Systems as described
 This is done by investigating the efficacy of using methods described to generate a wide array of unique instances of flora in real-time using efficient construction 
 and rendering techniques. 
 
-Supervisor: [Professor and director of the Embodied Social Agents Lab (ESAL) Dr, Christopher Peters](https://www.kth.se/profile/chpeters)
+Supervisor: [Professor and director of the Embodied Social Agents Lab (ESAL) Dr. Christopher Peters](https://www.kth.se/profile/chpeters)
 
 Video Demo: WIP
 
@@ -123,3 +123,110 @@ void BuildBranchMesh(Segment[] segments, int count)
 ```
 
 ### 2026 April 29 \- Greater control and refactoring
+In order to simulate more advanced plants, a more advanced L-System was required. This was accomplished by expanding the L-System in two major ways
+- Making it stochastic
+- Making it parametric
+
+A stochastic L-System allows multiple branching paths for one specific rule enabling diversity withing a plant species.
+It can additionally be used to set a natural limit for how large a plant can grow, by making it so that end-points, such as flowers,
+become more and more likely to occur as the tree has more iterations. This can then culminate in a 100% chance after a set limit, naturally having the plant stop growing.  
+An example can be seen below:
+
+```
+static int BuildStochasticShrub(int iters, PlantNode *out, int maxNodes, unsigned int seed)
+{
+    LSystem sys(seed);
+
+    sys.AddRule('A', 0.34f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'+'}, {'A'}, {'~'}, {']'}, {'F'}, {'['}, {'-'}, {'A'}, {'~'}, {']'}, {'A'}}; });
+    sys.AddRule('A', 0.33f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'+'}, {'A'}, {'~'}, {']'}, {'A'}}; });
+    sys.AddRule('A', 0.33f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'-'}, {'A'}, {'~'}, {']'}, {'A'}}; });
+
+    Sentence result = sys.Generate(MakeSentence("A"), iters);
+
+    return InterpretFull(result, 0.3f, 25.0f, out, maxNodes);
+}
+```
+A parametric L-System on the other hand enables different rules to carry parameters. These can be parameters such as length in the case of movement, an angle in the case of turning, or directly setting a branches radius to a value of choice. Previously, every time a rule appeared it had the same value, limiting choice greatly.  
+An example of this can be found from the following implemenation of a tree from *The Algorithmic Beauty of Plants*:
+
+```
+static int BuildABOPTree(int iters, PlantNode* out, int maxNodes, unsigned int seed)
+{
+    constexpr float d1 = 94.74f;
+    constexpr float d2 = 132.63f;
+    constexpr float a  = 18.95f;
+    constexpr float lr = 1.109f;
+    constexpr float vr = 1.732f;
+
+    LSystem sys(seed);
+
+    // p1 – Apex expansion with leaves and a single apical flower
+    sys.AddRule('A', [](const std::vector<float>&) {
+        return Sentence {
+            Symbol('!', {vr}),
+            Symbol('F', {50.f}),
+
+            Symbol('['),
+                Symbol('&', {a}), Symbol('F', {50.f}), Symbol('A'),
+                Symbol('~', {2.0f}),   // leaf near this arm's apex
+            Symbol(']'),
+
+            Symbol('/', {d1}),
+
+            Symbol('['),
+                Symbol('&', {a}), Symbol('F', {50.f}), Symbol('A'),
+                Symbol('~', {2.0f}),
+            Symbol(']'),
+
+            Symbol('/', {d2}),
+
+            Symbol('['),
+                Symbol('&', {a}), Symbol('F', {50.f}), Symbol('A'),
+                Symbol('~', {2.0f}),
+            Symbol(']'),
+
+            Symbol('@', {1.5f}),       // flower at the meristem apex
+        };
+    });
+
+    // p2 – Segment elongation
+    sys.AddRule(ProductionRule{
+        'F', 1.0f, nullptr,
+        [](const std::vector<float>& p) {
+            float l = p.empty() ? 1.f : p[0];
+            return Sentence { Symbol('F', {l * lr}) };
+        }
+    });
+
+    // p3 – Radius fattening (pipe model)
+    sys.AddRule(ProductionRule{
+        '!', 1.0f, nullptr,
+        [](const std::vector<float>& p) {
+            float w = p.empty() ? 1.f : p[0];
+            return Sentence { Symbol('!', {w * vr}) };
+        }
+    });
+
+    Sentence axiom {
+        Symbol('!', {1.f}),
+        Symbol('F', {200.f}),
+        Symbol('/', {45.f}),
+        Symbol('A'),
+    };
+
+    Sentence result = sys.Generate(axiom, iters);
+
+    std::cout << "[ABOPTree]  iter=" << iters
+              << "  seed=" << seed
+              << "  nodes=" << result.size() << "\n";
+
+    return InterpretFull(result, 1.0f, 22.5f, out, maxNodes);
+}
+```
+
+This creates the following tree, at iteration 1 and 5. Note that the performance output shown is of little interest except for the scene settings. 
+![ABOP Tree Iteration 1](Assets/ABOP1.png)
+![ABOP Tree Iteration 5](Assets/ABOP5.png)
