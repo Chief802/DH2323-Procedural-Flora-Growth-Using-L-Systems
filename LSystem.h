@@ -343,7 +343,7 @@ inline int InterpretFull(
             emit(NodeType::Flower, sym.param(0, 0.15f), turtle.pos);
             break;
 
-        case '!': // Set radius (Prusinkiewicz pipe model support)
+        case '!': // Set radius
             turtle.radius = sym.param(0, turtle.radius);
             break;
 
@@ -371,7 +371,7 @@ inline int InterpretFull(
 
         case '[':
             stk.push(turtle);
-            turtle.radius *= 0.7071f; // √½ per level: sum of children² = parent²
+            turtle.radius *= 0.7071f; // Each branches descreases by a factor of 1/sqrt(2)
             break;
         case ']':
             if (!stk.empty())
@@ -381,95 +381,6 @@ inline int InterpretFull(
             }
             break;
 
-        default:
-            break;
-        }
-    }
-    return count;
-}
-
-// =============================================================
-//  Interpret  –  legacy Segment output (backward compatibility)
-// =============================================================
-inline int Interpret(
-    const Sentence &commands,
-    float defaultStep,
-    float defaultAngleDeg,
-    Segment *outSegments,
-    int maxSegments)
-{
-    using namespace detail;
-    constexpr float kPi = 3.14159265f;
-    const float kDefaultAngleRad = defaultAngleDeg * kPi / 180.f;
-
-    TurtleState turtle = {
-        {0.f, 0.f, 0.f}, {0.f, 0.f, -1.f}, {-1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, 0.2f};
-    std::stack<TurtleState> stk;
-    int count = 0;
-
-    auto angleOf = [&](const Symbol &s) -> float
-    {
-        return s.params.empty() ? kDefaultAngleRad : s.params[0] * kPi / 180.f;
-    };
-
-    for (const Symbol &sym : commands)
-    {
-        switch (sym.letter)
-        {
-        case 'F':
-        {
-            float step = sym.param(0, defaultStep);
-            Vec3 np = {turtle.pos.x + step * turtle.H.x,
-                       turtle.pos.y + step * turtle.H.y,
-                       turtle.pos.z + step * turtle.H.z};
-            if (count < maxSegments)
-                outSegments[count++] = {turtle.pos, np, turtle.radius};
-            turtle.pos = np;
-            break;
-        }
-        case 'f':
-        {
-            float step = sym.param(0, defaultStep);
-            turtle.pos.x += step * turtle.H.x;
-            turtle.pos.y += step * turtle.H.y;
-            turtle.pos.z += step * turtle.H.z;
-            break;
-        }
-        case '!':
-            turtle.radius = sym.param(0, turtle.radius);
-            break;
-        case '+':
-            RotateTurtle(turtle, 'U', angleOf(sym));
-            break;
-        case '-':
-            RotateTurtle(turtle, 'U', -angleOf(sym));
-            break;
-        case '&':
-            RotateTurtle(turtle, 'L', angleOf(sym));
-            break;
-        case '^':
-            RotateTurtle(turtle, 'L', -angleOf(sym));
-            break;
-        case '\\':
-            RotateTurtle(turtle, 'H', angleOf(sym));
-            break;
-        case '/':
-            RotateTurtle(turtle, 'H', -angleOf(sym));
-            break;
-        case '|':
-            RotateTurtle(turtle, 'U', kPi);
-            break;
-        case '[':
-            stk.push(turtle);
-            turtle.radius *= 0.7071f;
-            break;
-        case ']':
-            if (!stk.empty())
-            {
-                turtle = stk.top();
-                stk.pop();
-            }
-            break;
         default:
             break;
         }

@@ -1,221 +1,156 @@
 // =============================================================
-//  GenerateFlora3D.cpp  –  C API implementation
-//
-//  All geometry goes through the same Sentence → InterpretFull
-//  pipeline.  The resulting PlantNode stream carries NodeType tags
-//  (Branch / Leaf / Flower) and per-node orientation frames, so the
-//  Unity bridge can build separate meshes for each plant part.
+//  GenerateFlora3D.cpp  –  C API implementation (Stable Topology)
 // =============================================================
 #define PLANTSIM_EXPORTS
 #include "GenerateFlora3D.h"
-
 #include <iostream>
 
 // =============================================================
 //  Example 0 – Parametric Tree
 // =============================================================
-/**
- * Single parametric rule:
- *   F(l) → F(l·R) [+(A)~(l·ls) F(l·r)] F(l·R) [-(A)~(l·ls) F(l·r)] F(l·R)
- *           when l > MIN_LEN
- *
- * '~' is emitted after each side branch, placing a leaf near the
- * fork.  A second terminal rule replaces a segment that has become
- * too short with a flower '@', so the outer canopy blooms.
- */
-static int BuildParametricTree(int iters, PlantNode* out, int maxNodes, unsigned int)
+static int BuildParametricTree(int iters, PlantNode *out, int maxNodes, unsigned int)
 {
     constexpr float TRUNK_R = 0.60f;
-    constexpr float SIDE_R  = 0.50f;
-    constexpr float LEAF_S  = 0.45f;   // leaf size relative to parent length
-    constexpr float ANGLE   = 25.7f;
+    constexpr float SIDE_R = 0.50f;
+    constexpr float LEAF_S = 0.45f;
+    constexpr float ANGLE = 25.7f;
     constexpr float MIN_LEN = 0.04f;
 
-    LSystem sys;   // deterministic – seed irrelevant
+    LSystem sys;
 
-    // ── Growing rule ────────────────────────────────────────────────────────
+    // 'A' is the apical meristem. 'F' segments are permanently left behind.
     sys.AddRule(ProductionRule{
-        'F', 1.0f,
-        [](const std::vector<float>& p) { return p.empty() || p[0] > MIN_LEN; },
-        [](const std::vector<float>& p) {
+        'A', 1.0f,
+        [](const std::vector<float> &p)
+        { return p.empty() || p[0] > MIN_LEN; },
+        [](const std::vector<float> &p)
+        {
             float l = p.empty() ? 1.0f : p[0];
-            return Sentence {
-                Symbol('F', {l * TRUNK_R}),
-                Symbol('['), Symbol('+', {ANGLE}),
-                    Symbol('~', {l * LEAF_S}),          // leaf near left fork
-                    Symbol('F', {l * SIDE_R}),
+            return Sentence{
+                Symbol('F', {l}),
+                Symbol('['),
+                Symbol('+', {ANGLE}),
+                Symbol('~', {l * LEAF_S}),
+                Symbol('A', {l * SIDE_R}),
                 Symbol(']'),
-                Symbol('F', {l * TRUNK_R}),
-                Symbol('['), Symbol('-', {ANGLE}),
-                    Symbol('~', {l * LEAF_S}),          // leaf near right fork
-                    Symbol('F', {l * SIDE_R}),
+                Symbol('F', {l}),
+                Symbol('['),
+                Symbol('-', {ANGLE}),
+                Symbol('~', {l * LEAF_S}),
+                Symbol('A', {l * SIDE_R}),
                 Symbol(']'),
-                Symbol('F', {l * TRUNK_R}),
+                Symbol('A', {l * TRUNK_R}),
             };
-        }
-    });
+        }});
 
-    // ── Terminal rule: replace tiny segments with flowers ────────────────────
     sys.AddRule(ProductionRule{
-        'F', 1.0f,
-        [](const std::vector<float>& p) { return !p.empty() && p[0] <= MIN_LEN; },
-        [](const std::vector<float>& p) {
+        'A', 1.0f,
+        [](const std::vector<float> &p)
+        { return !p.empty() && p[0] <= MIN_LEN; },
+        [](const std::vector<float> &p)
+        {
             float l = p.empty() ? MIN_LEN : p[0];
-            return Sentence { Symbol('@', {l * 4.0f}) };   // flower at canopy tip
-        }
-    });
+            return Sentence{Symbol('@', {l * 4.0f})};
+        }});
 
-    Sentence axiom { Symbol('F', {1.0f}) };
+    Sentence axiom{Symbol('A', {1.0f})};
     Sentence result = sys.Generate(axiom, iters);
 
-    std::cout << "[ParametricTree]  iter=" << iters
-              << "  nodes=" << result.size() << "\n";
-
+    std::cout << "[ParametricTree]  iter=" << iters << "  nodes=" << result.size() << "\n";
     return InterpretFull(result, 1.0f, ANGLE, out, maxNodes);
 }
-
 
 // =============================================================
 //  Example 1 – Stochastic Shrub
 // =============================================================
-/**
- * Three competing productions (sum p = 1.0):
- *   F → F[+F~]F[-F~]F   p = 0.34   dense, symmetric, leaves at tips
- *   F → F[+F~]F         p = 0.33   left-dominant
- *   F → F[-F~]F         p = 0.33   right-dominant
- *
- * '~' after each side branch places a leaf at its tip.
- * Different seeds produce recognisably different silhouettes.
- */
-static int BuildStochasticShrub(int iters, PlantNode* out, int maxNodes, unsigned int seed)
+static int BuildStochasticShrub(int iters, PlantNode *out, int maxNodes, unsigned int seed)
 {
     LSystem sys(seed);
 
-    sys.AddRule('F', 0.34f, [](const std::vector<float>&) {
-        return Sentence {
-            {'F'}, {'['}, {'+'}, {'F'}, {'~'}, {']'},
-            {'F'}, {'['}, {'-'}, {'F'}, {'~'}, {']'},
-            {'F'}
-        };
-    });
+    sys.AddRule('A', 0.34f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'+'}, {'A'}, {'~'}, {']'}, {'F'}, {'['}, {'-'}, {'A'}, {'~'}, {']'}, {'A'}}; });
+    sys.AddRule('A', 0.33f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'+'}, {'A'}, {'~'}, {']'}, {'A'}}; });
+    sys.AddRule('A', 0.33f, [](const std::vector<float> &)
+                { return Sentence{{'F'}, {'['}, {'-'}, {'A'}, {'~'}, {']'}, {'A'}}; });
 
-    sys.AddRule('F', 0.33f, [](const std::vector<float>&) {
-        return Sentence { {'F'}, {'['}, {'+'}, {'F'}, {'~'}, {']'}, {'F'} };
-    });
+    Sentence result = sys.Generate(MakeSentence("A"), iters);
 
-    sys.AddRule('F', 0.33f, [](const std::vector<float>&) {
-        return Sentence { {'F'}, {'['}, {'-'}, {'F'}, {'~'}, {']'}, {'F'} };
-    });
-
-    Sentence result = sys.Generate(MakeSentence("F"), iters);
-
-    std::cout << "[StochasticShrub]  iter=" << iters
-              << "  seed=" << seed
-              << "  nodes=" << result.size() << "\n";
-
+    std::cout << "[StochasticShrub]  iter=" << iters << "  seed=" << seed << "  nodes=" << result.size() << "\n";
     return InterpretFull(result, 0.3f, 25.0f, out, maxNodes);
 }
 
-
 // =============================================================
-//  Example 2 – Hybrid Plant  (parametric + stochastic)
+//  Example 2 – Hybrid Plant
 // =============================================================
-/**
- * Two competing parametric rules, each chosen with p = 0.5:
- *
- *   Rule A (upright split):
- *     F(l) → F(l·0.55) [+(30)~(l·0.4) F(l·0.45)]
- *             F(l·0.55) [-(30)~(l·0.4) F(l·0.45)] F(l·0.55)
- *
- *   Rule B (lean + 3-D twist):
- *     F(l) → F(l·0.6) [+(20)^(15) F(l·0.5)~(l·0.35)] F(l·0.6)
- *
- * Leaves appear near forks; a flower is placed at terminal segments.
- */
-static int BuildHybridPlant(int iters, PlantNode* out, int maxNodes, unsigned int seed)
+static int BuildHybridPlant(int iters, PlantNode *out, int maxNodes, unsigned int seed)
 {
     constexpr float MIN_LEN = 0.05f;
-
     LSystem sys(seed);
 
-    // Rule A – symmetric upright split
     sys.AddRule(ProductionRule{
-        'F', 0.5f,
-        [MIN_LEN](const std::vector<float>& p) { return p.empty() || p[0] > MIN_LEN; },
-        [](const std::vector<float>& p) {
+        'A', 0.5f,
+        [MIN_LEN](const std::vector<float> &p)
+        { return p.empty() || p[0] > MIN_LEN; },
+        [](const std::vector<float> &p)
+        {
             float l = p.empty() ? 1.0f : p[0];
-            return Sentence {
+            return Sentence{
                 Symbol('F', {l * 0.55f}),
-                Symbol('['), Symbol('+', {30.f}),
-                    Symbol('~', {l * 0.40f}),
-                    Symbol('F', {l * 0.45f}),
+                Symbol('['),
+                Symbol('+', {30.f}),
+                Symbol('~', {l * 0.40f}),
+                Symbol('A', {l * 0.45f}),
                 Symbol(']'),
                 Symbol('F', {l * 0.55f}),
-                Symbol('['), Symbol('-', {30.f}),
-                    Symbol('~', {l * 0.40f}),
-                    Symbol('F', {l * 0.45f}),
+                Symbol('['),
+                Symbol('-', {30.f}),
+                Symbol('~', {l * 0.40f}),
+                Symbol('A', {l * 0.45f}),
                 Symbol(']'),
-                Symbol('F', {l * 0.55f}),
+                Symbol('A', {l * 0.55f}),
             };
-        }
-    });
+        }});
 
-    // Rule B – lean with 3-D pitch twist
     sys.AddRule(ProductionRule{
-        'F', 0.5f,
-        [MIN_LEN](const std::vector<float>& p) { return p.empty() || p[0] > MIN_LEN; },
-        [](const std::vector<float>& p) {
+        'A', 0.5f,
+        [MIN_LEN](const std::vector<float> &p)
+        { return p.empty() || p[0] > MIN_LEN; },
+        [](const std::vector<float> &p)
+        {
             float l = p.empty() ? 1.0f : p[0];
-            return Sentence {
+            return Sentence{
                 Symbol('F', {l * 0.6f}),
                 Symbol('['),
-                    Symbol('+', {20.f}), Symbol('^', {15.f}),
-                    Symbol('F', {l * 0.5f}),
-                    Symbol('~', {l * 0.35f}),
+                Symbol('+', {20.f}),
+                Symbol('^', {15.f}),
+                Symbol('A', {l * 0.5f}),
+                Symbol('~', {l * 0.35f}),
                 Symbol(']'),
-                Symbol('F', {l * 0.6f}),
+                Symbol('A', {l * 0.6f}),
             };
-        }
-    });
+        }});
 
-    // Terminal rule – tiny segment → flower
     sys.AddRule(ProductionRule{
-        'F', 1.0f,
-        [MIN_LEN](const std::vector<float>& p) { return !p.empty() && p[0] <= MIN_LEN; },
-        [](const std::vector<float>& p) {
+        'A', 1.0f,
+        [MIN_LEN](const std::vector<float> &p)
+        { return !p.empty() && p[0] <= MIN_LEN; },
+        [](const std::vector<float> &p)
+        {
             float l = p.empty() ? MIN_LEN : p[0];
-            return Sentence { Symbol('@', {l * 3.5f}) };
-        }
-    });
+            return Sentence{Symbol('@', {l * 3.5f})};
+        }});
 
-    Sentence axiom { Symbol('F', {1.0f}) };
+    Sentence axiom{Symbol('A', {1.0f})};
     Sentence result = sys.Generate(axiom, iters);
 
-    std::cout << "[HybridPlant]  iter=" << iters
-              << "  seed=" << seed
-              << "  nodes=" << result.size() << "\n";
-
+    std::cout << "[HybridPlant]  iter=" << iters << "  seed=" << seed << "  nodes=" << result.size() << "\n";
     return InterpretFull(result, 1.0f, 25.0f, out, maxNodes);
 }
 
-
 // =============================================================
-//  Example 3 – ABOP Sympodial Tree  (Prusinkiewicz §2.6)
+//  Example 3 – ABOP Sympodial Tree
 // =============================================================
-/**
- * Three interacting parametric rules modelling a monopodial tree
- * with whorled branching:
- *
- *   p1: A → !(vr) F(50) [&(a) F(50) A ~(2.0)] /(d1)
- *                        [&(a) F(50) A ~(2.0)] /(d2)
- *                        [&(a) F(50) A ~(2.0)]
- *   p2: F(l) → F(l·lr)         (segment elongation per step)
- *   p3: !(w) → !(w·vr)         (radius fattening per step)
- *
- * '~' placed after each F(50)A arm puts a leaf near every branch apex.
- * A flower '@' is emitted at the meristem apex on each A expansion so
- * the very top of each branch cluster blooms.
- */
 static int BuildABOPTree(int iters, PlantNode* out, int maxNodes, unsigned int seed)
 {
     constexpr float d1 = 94.74f;
@@ -289,25 +224,103 @@ static int BuildABOPTree(int iters, PlantNode* out, int maxNodes, unsigned int s
     return InterpretFull(result, 1.0f, 22.5f, out, maxNodes);
 }
 
+// =============================================================
+//  Example 4 – Custom Blooming Tree
+// =============================================================
+static int BuildCustomTree(int iters, PlantNode *out, int maxNodes, unsigned int seed)
+{
+    LSystem sys(seed);
+
+    // We capture a random number generator to evaluate dynamic probabilities
+    std::mt19937 local_rng(seed);
+
+    sys.AddRule(ProductionRule{
+        'A', 1.0f,
+        nullptr,
+        [&local_rng](const std::vector<float> &p)
+        {
+            // Extract parameters: [length, radius, depth]
+            float l = p.empty() ? 1.0f : p[0];
+            float r = p.size() > 1 ? p[1] : 0.8f;     // Starting trunk thickness
+            float depth = p.size() > 2 ? p[2] : 0.0f; // Tracks current iteration tier
+
+            // Chance to bloom reaches 100% by depth 8
+            float chance = depth >= 8.0f ? 1.0f : depth / 8.0f;
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+            if (dist(local_rng) < chance)
+            {
+                // TERMINAL STATE: Branch stops growing, produces a rosette leaf cluster and a flower
+                return Sentence{
+                    Symbol('!', {r}),
+                    Symbol('F', {l}),
+                    Symbol('['), Symbol('+', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('-', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('^', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('&', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('@', {l * 3.0f})};
+            }
+            else
+            {
+                // GROWTH STATE: Branch gets thinner, spawns leaves and new sub-branches
+                return Sentence{
+                    Symbol('!', {r}),
+                    Symbol('F', {l}),
+
+                    // Small leaves along the stem
+                    Symbol('['), Symbol('+', {50.f}), Symbol('~', {l * 0.4f}), Symbol(']'),
+                    Symbol('['), Symbol('-', {50.f}), Symbol('~', {l * 0.4f}), Symbol(']'),
+
+                    // Side Branch 1 (notice 'r' is scaled down by 0.6 to get thinner)
+                    Symbol('['), Symbol('+', {30.f}), Symbol('^', {15.f}),
+                    Symbol('A', {l * 0.85f, r * 0.6f, depth + 1.f}), Symbol(']'),
+
+                    // Side Branch 2
+                    Symbol('['), Symbol('-', {35.f}), Symbol('&', {10.f}),
+                    Symbol('A', {l * 0.8f, r * 0.55f, depth + 1.f}), Symbol(']'),
+
+                    // Side Branch 3 (adds 3D volume using the roll '\' operator)
+                    Symbol('['), Symbol('\\', {90.f}), Symbol('+', {40.f}),
+                    Symbol('A', {l * 0.75f, r * 0.5f, depth + 1.f}), Symbol(']'),
+
+                    // Main Trunk elongation (scales 'r' by 0.85 to taper smoothly)
+                    Symbol('A', {l * 0.95f, r * 0.85f, depth + 1.f})};
+            }
+        }});
+
+    // Axiom starts at depth 0 with a thick radius of 0.8
+    Sentence axiom{Symbol('A', {5.0f, 0.8f, 0.0f})};
+    Sentence result = sys.Generate(axiom, iters);
+
+    std::cout << "[CustomTree]  iter=" << iters << "  seed=" << seed << "  nodes=" << result.size() << "\n";
+    return InterpretFull(result, 1.0f, 25.0f, out, maxNodes);
+}
 
 // =============================================================
 //  Exported C API
 // =============================================================
-extern "C" {
+extern "C"
+{
 
-PLANTSIM_API int GeneratePlant(
-    int exampleId, int iterations,
-    PlantNode* outNodes, int maxNodes, unsigned int seed
-) {
-    switch (exampleId) {
-    case 0: return BuildParametricTree(iterations, outNodes, maxNodes, seed);
-    case 1: return BuildStochasticShrub(iterations, outNodes, maxNodes, seed);
-    case 2: return BuildHybridPlant   (iterations, outNodes, maxNodes, seed);
-    case 3: return BuildABOPTree      (iterations, outNodes, maxNodes, seed);
-    default:
-        std::cerr << "[GeneratePlant] Unknown exampleId: " << exampleId << "\n";
-        return 0;
+    PLANTSIM_API int GeneratePlant(
+        int exampleId, int iterations,
+        PlantNode *outNodes, int maxNodes, unsigned int seed)
+    {
+        switch (exampleId)
+        {
+        case 0:
+            return BuildParametricTree(iterations, outNodes, maxNodes, seed);
+        case 1:
+            return BuildStochasticShrub(iterations, outNodes, maxNodes, seed);
+        case 2:
+            return BuildHybridPlant(iterations, outNodes, maxNodes, seed);
+        case 3:
+            return BuildABOPTree(iterations, outNodes, maxNodes, seed);
+        case 4:
+            return BuildCustomTree(iterations, outNodes, maxNodes, seed);
+        default:
+            std::cerr << "[GeneratePlant] Unknown exampleId: " << exampleId << "\n";
+            return 0;
+        }
     }
 }
-
-} // extern "C"
