@@ -80,7 +80,7 @@ inline void RotateTurtle(TurtleState &t, char axis, float alpha)
     }
 ```
 
-This first 3D implemented simple cylinders to connect points for simplcitity, but was later to be changed to something that had more of a justification for its implementation. 
+This first 3D implemented cylinders to connect points for simplicitity, but was later to be changed to something that had more of a justification for its implementation. 
 Nevertheless, the implementation looked like the following:
 ```
 void BuildBranchMesh(Segment[] segments, int count)
