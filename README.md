@@ -35,7 +35,7 @@ Before an evaluation can take place, there needs to be something to evaluate. Th
 
 ![First version in 2D](Assets/PlantSim2DV01.gif)
 
-### INTERMISSION 1 - How does a basic L-System work?
+### INTERMISSION - How does a basic L-System work?
 What Prusinkiewicz et al and related works fundamentally argue, is that the way plants grow is neither unpredictable or inimitable, but rather in accordance to 
 algorithms of various complexities that we ourselves can imitate.
 
@@ -49,9 +49,10 @@ This plant above follows a very simply rule:  `F :- F[+F]F[-F]F`
 This tells us that *for every segment F, go forward; start a new branch, turn left, and go forward; go forward; start a new branch, turn right, and go forward; and finally go forward again*. By writing more and more sophisticated rules, we can create more and more sophisticated plants.  
 
 ### 2026 April 20 \- What if we had even more dimensions?  
-Although there is value in having a 2D implementation (more on that later), the goal was always to expand to 3D. This meant that two things needed to be changed:
+Although there is value in having a 2D implementation (which I shall expand upon in the "future work" section whenever that is written), the goal was always to expand to 3D. This meant that two things needed to be changed:
 - The way the turtle moves
-- The way the plant is rendered
+- The way the plant is rendered  
+
 The TurtleState struct now has a 3D position and three vectors U (Up), L (Left), and H (Heading) for direction.
 These allow us to implement  pitch, yaw, and roll for the turtle.
 
@@ -227,6 +228,21 @@ static int BuildABOPTree(int iters, PlantNode* out, int maxNodes, unsigned int s
 }
 ```
 
-This creates the following tree, at iteration 1 and 5. Note that the performance output shown is of little interest except for the scene settings. 
+This creates the following tree, at iteration 1 and 5. Note that the performance output shown is of little interest except for the output from the scene.
 ![ABOP Tree Iteration 1](Assets/ABOP1.png)
-![ABOP Tree Iteration 5](Assets/ABOP5.png)
+![ABOP Tree Iteration 5](Assets/ABOP5.png)  
+The next step is to implement animations (a much better stress test) and a nicer way to connect parts of the tree (notice the different cylinders being very visible)
+
+Lastly, the current rules for the L-System are the following:
+- F(l)   Draw forward, step = l
+- f(l)   Move forward, no geometry
+- ~(s)   Emit a Leaf  at current position, size = s   
+- @(s)   Emit a Flower at current position, size = s
+- !(w)   Set current radius to w
+- \+ \-  Yaw   left / right   
+- & ^    Pitch  down / up
+- \ /    Roll   left / right
+- |      U-turn (180°)
+- \[]   Start/end branch  
+
+Note that all angle options also take in parameters.
