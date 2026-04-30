@@ -35,7 +35,7 @@ Before an evaluation can take place, there needs to be something to evaluate. Th
 
 ![First version in 2D](Assets/PlantSim2DV01.gif)
 
-### INTERMISSION 1 - How does a basic L-System work?
+### INTERMISSION - How does a basic L-System work?
 What Prusinkiewicz et al and related works fundamentally argue, is that the way plants grow is neither unpredictable or inimitable, but rather in accordance to 
 algorithms of various complexities that we ourselves can imitate.
 
@@ -227,6 +227,7 @@ static int BuildABOPTree(int iters, PlantNode* out, int maxNodes, unsigned int s
 }
 ```
 
-This creates the following tree, at iteration 1 and 5. Note that the performance output shown is of little interest except for the scene settings. 
+This creates the following tree, at iteration 1 and 5. Note that the performance output shown is of little interest except for the output from the scene.
 ![ABOP Tree Iteration 1](Assets/ABOP1.png)
-![ABOP Tree Iteration 5](Assets/ABOP5.png)
+![ABOP Tree Iteration 5](Assets/ABOP5.png)  
+The next step is to implement animations (a much better stress test) and a nicer way to connect parts of the tree (notice the different cylinders being very visible)
