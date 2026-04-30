@@ -29,7 +29,7 @@ The focus was consequently set on evaluating the algorithm and its implementatio
 - Realism, in terms of how well the structure of real flora is captured by the L-System
 These aspects were then taken from the individual level of one plant, to investigating how scaling to many more floral instances affect them.
 
-2026 April 14 \- The first plant  
+### 2026 April 14 \- The first plant  
 Before an evaluation can take place, there needs to be something to evaluate. The current short-term goal for the project was at this point to implement both a basic, 
 2-Dimenstional plant, and to be able to have it be shown in Unity (with the use of LineRenderer). This first instance, and its growth stages, can be shown below.
 
