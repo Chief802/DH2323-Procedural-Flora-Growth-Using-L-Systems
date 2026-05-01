@@ -246,3 +246,94 @@ Lastly, the current rules for the L-System are the following:
 - \[]   Start/end branch  
 
 Note that all angle options also take in parameters.
+### 2026 May 1 \- Animation, Structural Improvements and Performance Enhancement
+After extending to three dimensions, in addition to allowing plants of whichever complexity we want, the next step was to shift the project focus to the Real-Time rendering aspect.  
+
+To begin with, a better tester plant was created that would be both stochastic and parametric, featuring both leaves and flowers. This plant will naturally stop growing after enough iterations have taken place, with a trunk that additionally gets smaller as the plant grows upwards. The rules for it are as follows:  
+```
+static int BuildCustomTree(int iters, PlantNode *out, int maxNodes, unsigned int seed)
+{
+    LSystem sys(seed);
+
+    std::mt19937 local_rng(seed);
+
+    sys.AddRule(ProductionRule{
+        'A', 1.0f,
+        nullptr,
+        [&local_rng](const std::vector<float> &p)
+        {
+            // Extract parameters: [length, radius, depth]
+            float l = p.empty() ? 1.0f : p[0];
+            float r = p.size() > 1 ? p[1] : 0.8f;     // Starting trunk thickness
+            float depth = p.size() > 2 ? p[2] : 0.0f; // Tracks current iteration tier
+
+            // Chance to bloom reaches 100% by depth 8
+            float chance = depth >= 8.0f ? 1.0f : depth / 8.0f;
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+            if (dist(local_rng) < chance)
+            {
+                // TERMINAL STATE: Branch stops growing, produces a rosette leaf cluster and a flower
+                return Sentence{
+                    Symbol('!', {r}),
+                    Symbol('F', {l}),
+                    Symbol('['), Symbol('+', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('-', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('^', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('['), Symbol('&', {30.f}), Symbol('~', {l * 0.9f}), Symbol(']'),
+                    Symbol('@', {l * 3.0f})};
+            }
+            else
+            {
+                // Branch gets thinner, spawns leaves and new sub-branches
+                return Sentence{
+                    Symbol('!', {r}),
+                    Symbol('F', {l}),
+
+                    // Small leaves along the stem
+                    Symbol('['), Symbol('+', {50.f}), Symbol('~', {l * 0.4f}), Symbol(']'),
+                    Symbol('['), Symbol('-', {50.f}), Symbol('~', {l * 0.4f}), Symbol(']'),
+
+                    // Side Branch 1
+                    Symbol('['), Symbol('+', {30.f}), Symbol('^', {15.f}),
+                    Symbol('A', {l * 0.85f, r * 0.6f, depth + 1.f}), Symbol(']'),
+
+                    // Side Branch 2
+                    Symbol('['), Symbol('-', {35.f}), Symbol('&', {10.f}),
+                    Symbol('A', {l * 0.8f, r * 0.55f, depth + 1.f}), Symbol(']'),
+
+                    // Side Branch 3 (adds 3D volume using the roll '\' operator)
+                    Symbol('['), Symbol('\\', {90.f}), Symbol('+', {40.f}),
+                    Symbol('A', {l * 0.75f, r * 0.5f, depth + 1.f}), Symbol(']'),
+
+                    // Main Trunk elongation (scales 'r' by 0.85 to taper smoothly)
+                    Symbol('A', {l * 0.95f, r * 0.85f, depth + 1.f})};
+            }
+        }});
+```
+
+From one iteration to another, branches, leaves, and flowers are created. The goal is to have the transition from one of these iterations to the next appear smooth, such that the aforementioned plant parts are extended from previously existing ones. The user should additionally not need to input anything to have the plant grow from one stage to the next - continuity is important.  
+
+We can save on resources by only investigating nodes that actually need to grow. If a part has been unchanged then we can deem it finished.  
+```
+if (animate)
+{
+    // Calculates when each node should start and stop growing based on its depth in the tree.
+    ComputeTimelines();
+    var (leafShape, flowerShape) = TypeShapes[treeType];
+    int leafDetail = ActiveLeafDetail();
+
+    // Populate stable meshes with old nodes to keep them off the dynamic update loop
+    BuildBranchMesh(BuildMode.Stable, _stableBranchMesh);
+    BuildLeafMesh(_curLeaves, leafShape, leafDetail, true, FilterMode.OnlyOld, _stableLeafMesh);
+    BuildFlowerMesh(_curFlowers, flowerShape, true, FilterMode.OnlyOld, _stableFlowerMesh);
+
+    // Records the current layout to differentiate "old" structure from "new" structure later.
+    RefreshKnownHashes();
+    _animProgress = 0f;
+    // Coroutine handling the frame-by-frame mesh update of new segments.
+    _growthCoroutine = StartCoroutine(GrowthAnimation());
+}
+```  
+
+Generating many edges and vertices is not without cost, however...
