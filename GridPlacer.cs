@@ -3,7 +3,7 @@ using UnityEngine;
 public class GridPlacer : MonoBehaviour
 {
     [Header("Prefab")]
-    public GameObject plantPrefab; 
+    public GameObject plantPrefab;
 
     [Header("Grid Settings")]
     public int gridSizeX = 10;
@@ -40,6 +40,8 @@ public class GridPlacer : MonoBehaviour
                 if (plant != null)
                 {
                     plant.seed = (uint)Random.Range(1, int.MaxValue);
+                    plant.growthDuration = (uint)Random.Range(2, 10);
+                    plant.maxIterations = (int)Random.Range(3, 8);
                 }
             }
         }

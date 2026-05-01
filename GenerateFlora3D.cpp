@@ -289,7 +289,7 @@ static int BuildCustomTree(int iters, PlantNode *out, int maxNodes, unsigned int
         }});
 
     // Axiom starts at depth 0 with a thick radius of 0.8
-    Sentence axiom{Symbol('A', {5.0f, 0.8f, 0.0f})};
+    Sentence axiom{Symbol('A', {7.0f, 0.8f, 0.0f})};
     Sentence result = sys.Generate(axiom, iters);
 
     std::cout << "[CustomTree]  iter=" << iters << "  seed=" << seed << "  nodes=" << result.size() << "\n";

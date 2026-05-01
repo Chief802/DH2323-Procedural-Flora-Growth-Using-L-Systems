@@ -859,7 +859,7 @@ public class PlantRenderer : MonoBehaviour
             Vector3 pn = (axis + pd * curvature).normalized;
 
             int pb = _verts.Count;
-            _verts.Add(rC - lat * hw); _verts.Add(rC + lat * hw); _verts.Add(tC + lat * lat * hw * 0.35f); _verts.Add(tC - lat * hw * 0.35f);
+            _verts.Add(rC - lat * hw); _verts.Add(rC + lat * hw); _verts.Add(tC + lat * hw * 0.35f); _verts.Add(tC - lat * hw * 0.35f);
             for (int k = 0; k < 4; k++) _norms.Add(pn);
             _uvs.Add(Vector2.zero); _uvs.Add(new Vector2(1, 0)); _uvs.Add(Vector2.one); _uvs.Add(new Vector2(0, 1));
             
