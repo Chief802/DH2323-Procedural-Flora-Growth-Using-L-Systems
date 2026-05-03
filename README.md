@@ -383,6 +383,7 @@ void ComputeTimelines()
 
 We can additionally save on resources by only investigating nodes that actually need to grow, whereas if a part has been unchanged then we can deem it finished. This made to mirror the incremental mesh streaming approach - essentially rendering a 3D model progressively - described by Yoon et al. in [Mesh Layouts for Block-Based Caches
 ](https://www.researchgate.net/publication/3410557_Mesh_Layouts_for_Block-Based_Caches). Unitys [Mesh.MarkDynamic()](https://docs.unity3d.com/6000.3/Documentation/ScriptReference/Mesh.MarkDynamic.html) "hints" that a mesh will be updated regulary, allowing us to optimize its rendering.
+```
 if (animate)
 {
     // Calculates when each node should start and stop growing based on its depth in the tree.
