@@ -3,7 +3,9 @@
 ## Abstract
 This project extends the methods for generating flora using L-Systems as described in *The Algorithmic Beauty of Plants* by Przemyslaw Prusinkiewicz and Aristid Lindenmayer. 
 This is done by investigating the efficacy of using methods described to generate a wide array of unique instances of flora in real-time using efficient construction 
-and rendering techniques. The algorithm to rendering pipeline includes implementations of 
+and rendering techniques. These optimization techniques include spacial hashing for faster lookups, incremental mesh streaming for separation of static and dynamic meshes, 
+distance based level of detail, and distributing animations over multiple frames according to a frame budget.
+
 
 Supervisor: [Professor and director of the Embodied Social Agents Lab (ESAL) Dr. Christopher Peters](https://www.kth.se/profile/chpeters)
 
@@ -19,7 +21,6 @@ This study's implementation is in three major parts:
 
 The floral axioms and L-System parser were implemented in C++, whereas the Unity bridge was implemented in C#.
 A .dll file needs to be built in order to run the program. No additional packages or third-party APIs were used in Unity. 
-
 
 
 ## Some Update Highlights
@@ -381,7 +382,7 @@ void ComputeTimelines()
 }
 ```
 
-We can additionally save on resources by only investigating nodes that actually need to grow, whereas if a part has been unchanged then we can deem it finished. This made to mirror the incremental mesh streaming approach - essentially rendering a 3D model progressively - described by Yoon et al. in [Mesh Layouts for Block-Based Caches
+We can additionally save on resources by only investigating nodes that actually need to grow, whereas if a part has been unchanged then we can deem it finished. This is made to mirror the incremental mesh streaming approach - essentially rendering a 3D model progressively - described by Yoon et al. in [Mesh Layouts for Block-Based Caches
 ](https://www.researchgate.net/publication/3410557_Mesh_Layouts_for_Block-Based_Caches). Unitys [Mesh.MarkDynamic()](https://docs.unity3d.com/6000.3/Documentation/ScriptReference/Mesh.MarkDynamic.html) "hints" that a mesh will be updated regulary, allowing us to optimize its rendering.
 ```
 if (animate)
@@ -402,15 +403,70 @@ if (animate)
     // Coroutine handling the frame-by-frame mesh update of new segments.
     _growthCoroutine = StartCoroutine(GrowthAnimation());
 }
-```  
+```
 
-Throughout the working process testing was done to look at progress and work on making generation and rendering more efficient. Below are two versions of the 25 trees being generated simulateneously using random seeds. Optimizations could be made by, among others, filtering and separating old and new meshses as mentioned above, as well as through better handling of large amounts of data relating to storing parts of flora - triangles, vertices and normals. The changes overall led from a low fps of 10-20 at worst originally, to one of 40-35 with the changes implemented. Two video examples can be seen below: 
+The _growthCoroutine seen above ensures that too much is not attempted at the same time - animation is split up over frames. This will help avoid extreme performance hits, as well as the program crashing.
+```
+// Coroutine handling the frame-by-frame mesh update of "new" segments.
+IEnumerator GrowthAnimation()
+{
+    var (leafShape, flowerShape) = TypeShapes[treeType];
+    int leafDetail = ActiveLeafDetail();
+    float elapsed = 0f;
+
+    while (elapsed < growthDuration)
+    {
+        elapsed += Time.deltaTime;
+        _animProgress = Mathf.Clamp01(elapsed / growthDuration);
+
+        // Rebuild growing meshes inside existing dynamic mesh objects
+        BuildBranchMesh(BuildMode.Growing, _growingBranchMesh);
+        BuildLeafMesh(_curLeaves, leafShape, leafDetail, false, FilterMode.OnlyNew, _growingLeafMesh);
+        BuildFlowerMesh(_curFlowers, flowerShape, false, FilterMode.OnlyNew, _growingFlowerMesh);
+
+        yield return null;
+    }
+
+    // Once complete, merge everything back into the static mesh 
+    _animProgress = 1f;
+    _growthCoroutine = null;
+    RebuildAllFull();
+    ArmContinuousTimer();
+}
+```
+Implementing a dynamic Level of Detail scheme was also for the purpose of performance. The distance from the camera to the plant affects the LOD directly.
+```
+    //Checks distance from the camera to swap the level of detail (LOD) geometry.
+    void UpdateLod()
+    {
+        _lodTimer -= Time.deltaTime;
+        if (_lodTimer > 0f || _growthCoroutine != null) return;
+        _lodTimer = lodCheckInterval;
+
+        Camera cam = Camera.main;
+        if (cam == null || lodSettings == null || lodSettings.Length == 0) return;
+
+        float dist = Vector3.Distance(cam.transform.position, transform.position);
+        int newLod = lodSettings.Length - 1;
+        
+        // Determine correct LOD tier
+        for (int i = 0; i < lodSettings.Length; i++)
+            if (dist <= lodSettings[i].maxDistance) { newLod = i; break; }
+
+        if (newLod == _activeLod) return;
+        _activeLod = newLod;
+        _currentRadialSegs = lodSettings[_activeLod].branchRadialSegments;
+        
+        RebuildAllFull(); // Force a rebuild if the LOD tier changes
+    }
+```
+Throughout the working process testing was done to look at progress and work on making generation and rendering more efficient. Below are two versions of the 25 trees being generated simulateneously using random seeds. Among previously mentioned methods of improving performance, simply ensuring that large arrays and lists such as _verts are preallocated helps avoid needless runtime calculations, as well as [spatial hashing](https://www.researchgate.net/publication/2909661_Optimized_Spatial_Hashing_for_Collision_Detection_of_Deformable_Objects) for much better lookup complexity. The changes overall led from a low fps of 10-20 at worst originally, to one of 40-35 fps with the changes implemented. Two video examples can be seen below: 
 
 [First version of animation implementation.](https://drive.google.com/file/d/1SHFigK0BJLCoaQEyeYByQspLdPtttUMK/view?usp=drive_link)
 
 [Improved version of animation implementation.](https://drive.google.com/file/d/10gUE37sNEC_C_KQyNiAsOM6gOOgn56r2/view?usp=drive_link)  
 
-Unlike the previous version, plants feature better connections between segments. The general cylinder model, as described by Bloomenthal [Modeling the Mighty Maple ](https://dl.acm.org/doi/10.1145/325165.325249) involves constructing rings of vertices at a segments beginning and end, followed by stitching them together.
+Finally, unlike the previous version, plants feature better connections between segments. The general cylinder model, as described by Bloomenthal [Modeling the Mighty Maple ](https://dl.acm.org/doi/10.1145/325165.325249) involves constructing rings of vertices at a segments beginning and end, followed by stitching them together.
 ```
 // Emits a circle of vertices to represent a slice of a branch.
 void EmitRing(Vector3 center, float radius, Vector3 frameN, Vector3 frameB, float vCoord, int R)
