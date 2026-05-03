@@ -1,9 +1,9 @@
 # Real-Time Procedural Flora Growth Using L-Systems
 
 ## Abstract
-This paper extends the methods for generating flora using L-Systems as described in *The Algorithmic Beauty of Plants* by Przemyslaw Prusinkiewicz and Aristid Lindenmayer. 
+This project extends the methods for generating flora using L-Systems as described in *The Algorithmic Beauty of Plants* by Przemyslaw Prusinkiewicz and Aristid Lindenmayer. 
 This is done by investigating the efficacy of using methods described to generate a wide array of unique instances of flora in real-time using efficient construction 
-and rendering techniques. 
+and rendering techniques. The algorithm to rendering pipeline includes implementations of 
 
 Supervisor: [Professor and director of the Embodied Social Agents Lab (ESAL) Dr. Christopher Peters](https://www.kth.se/profile/chpeters)
 
@@ -19,6 +19,8 @@ This study's implementation is in three major parts:
 
 The floral axioms and L-System parser were implemented in C++, whereas the Unity bridge was implemented in C#.
 A .dll file needs to be built in order to run the program. No additional packages or third-party APIs were used in Unity. 
+
+
 
 ## Some Update Highlights
 ### 2026 April 12 \- Project Start  
@@ -312,10 +314,75 @@ static int BuildCustomTree(int iters, PlantNode *out, int maxNodes, unsigned int
         }});
 ```
 
-From one iteration to another, branches, leaves, and flowers are created. The goal is to have the transition from one of these iterations to the next appear smooth, such that the aforementioned plant parts are extended from previously existing ones. The user should additionally not need to input anything to have the plant grow from one stage to the next - continuity is important.  
-
-We can save on resources by only investigating nodes that actually need to grow. If a part has been unchanged then we can deem it finished.  
+From one iteration to another, branches, leaves, and flowers are created. The goal is to have the transition from one of these iterations to the next appear smooth, such that the aforementioned plant parts are extended from previously existing ones. The user should additionally not need to input anything to have the plant grow from one stage to the next - continuity is important. The state-of-the-art method for animating plant growth was formalized in the aptly named (Animation of plant development)[https://www.researchgate.net/publication/220720547_Animation_of_plant_development] by Prusinkiewicz et al. Plants are grown in a BFS-ordered sequence \- meaning they branch out from the start-point. In the ComputeTimelines function branches are grown first, followed by leaves and flowers after a certain delay. 
 ```
+// Calculates exactly when each node should start and stop growing based on its depth in the tree.
+// Simulates natural propagation from root to tips.
+void ComputeTimelines()
+{
+    ...
+    // Process branches
+    foreach (int i in bfsOrder)
+    {
+        ulong h = NodeHash(_curBranches[i]);
+        bool old = _knownHashes.Contains(h);
+        NodeAnim a;
+
+        if (old)
+        {
+            // Already grown, keep static
+            a = new NodeAnim { StartT = 0f, EndT = 0f, IsNew = false };
+            segEndT[i] = 0f;
+        }
+        else
+        {
+            // Calculate growth window based on parent's end time
+            int pi = _cachedGraph.Segments[i].Parent;
+            float startT = (pi < 0) ? 0f : segEndT[pi];
+            float endT = Mathf.Min(1f - FOLIAGE_WINDOW, startT + branchWindow);
+            a = new NodeAnim { StartT = startT, EndT = endT, IsNew = true };
+            segEndT[i] = endT;
+        }
+
+        _timeline[h] = a;
+        var key = Quantize(_curBranches[i].end);
+        
+        if (!tipEndT.TryGetValue(key, out float prev) || segEndT[i] > prev)
+            tipEndT[key] = segEndT[i];
+    }
+
+    // Process foliage (Starts after its parent branch is fully grown)
+    void AssignFoliage(List<PlantNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            ulong h = NodeHash(node);
+            if (_knownHashes.Contains(h))
+            {
+                _timeline[h] = new NodeAnim { StartT = 0f, EndT = 0f, IsNew = false };
+                continue;
+            }
+
+            var key = Quantize(node.origin);
+            if (!tipEndT.TryGetValue(key, out float parentEndT))
+                parentEndT = 1f - FOLIAGE_WINDOW;
+
+            _timeline[h] = new NodeAnim
+            {
+                StartT = parentEndT,
+                EndT = Mathf.Min(1f, parentEndT + FOLIAGE_WINDOW),
+                IsNew = true,
+            };
+        }
+    }
+
+    AssignFoliage(_curLeaves);
+    AssignFoliage(_curFlowers);
+}
+```
+
+We can additionally save on resources by only investigating nodes that actually need to grow, whereas if a part has been unchanged then we can deem it finished. This made to mirror the incremental mesh streaming approach - essentially rendering a 3D model progressively - described by Yoon et al. in [Mesh Layouts for Block-Based Caches
+](https://www.researchgate.net/publication/3410557_Mesh_Layouts_for_Block-Based_Caches). Unitys [Mesh.MarkDynamic()](https://docs.unity3d.com/6000.3/Documentation/ScriptReference/Mesh.MarkDynamic.html) "hints" that a mesh will be updated regulary, allowing us to optimize its rendering.
 if (animate)
 {
     // Calculates when each node should start and stop growing based on its depth in the tree.
@@ -336,4 +403,73 @@ if (animate)
 }
 ```  
 
-Generating many edges and vertices is not without cost, however...
+Throughout the working process testing was done to look at progress and work on making generation and rendering more efficient. Below are two versions of the 25 trees being generated simulateneously using random seeds. Optimizations could be made by, among others, filtering and separating old and new meshses as mentioned above, as well as through better handling of large amounts of data relating to storing parts of flora - triangles, vertices and normals. The changes overall led from a low fps of 10-20 at worst originally, to one of 40-35 with the changes implemented. Two video examples can be seen below: 
+
+[First version of animation implementation.](https://drive.google.com/file/d/1SHFigK0BJLCoaQEyeYByQspLdPtttUMK/view?usp=drive_link)
+
+[Improved version of animation implementation.](https://drive.google.com/file/d/10gUE37sNEC_C_KQyNiAsOM6gOOgn56r2/view?usp=drive_link)  
+
+Unlike the previous version, plants feature better connections between segments. The general cylinder model, as described by Bloomenthal [Modeling the Mighty Maple ](https://dl.acm.org/doi/10.1145/325165.325249) involves constructing rings of vertices at a segments beginning and end, followed by stitching them together.
+```
+// Emits a circle of vertices to represent a slice of a branch.
+void EmitRing(Vector3 center, float radius, Vector3 frameN, Vector3 frameB, float vCoord, int R)
+{
+    for (int s = 0; s < R; s++)
+    {
+        float theta = s / (float)R * Mathf.PI * 2f;
+        Vector3 outDir = Mathf.Cos(theta) * frameN + Mathf.Sin(theta) * frameB;
+        _verts.Add(center + outDir * radius);
+        _norms.Add(outDir);
+        _uvs.Add(new Vector2((float)s / R, vCoord)); // Map UV horizontally along the texture
+    }
+}
+```
+
+This can then be utilized by BuildBranchMesh:
+```
+ void BuildBranchMesh(BuildMode mode, Mesh targetMesh)
+{
+    ...
+    while (queue.Count > 0)
+    ...
+        // Connect this segment's base to the parent's tip to prevent gaps
+        int baseStart = (seg.Parent >= 0 && tipRingStart[seg.Parent] >= 0) ? tipRingStart[seg.Parent] : _verts.Count;
+        if (baseStart == _verts.Count) EmitRing(seg.Origin, r, frameN, frameB, 0f, R); // No parent; generate new base
+        
+        Vector3 tipPos = seg.Origin + tangent * (segLen * growT);
+        float tipR = r * Mathf.Lerp(0.05f, 1f, growT); // Tapering slightly at the tip
+        
+        tipRingStart[idx] = _verts.Count;
+        EmitRing(tipPos, tipR, frameN, frameB, 1f, R);
+        
+        tipPositions[idx] = tipPos;
+        tipTangents[idx] = tangent;
+        
+        // Stitch the base ring and tip ring together with triangles
+        for (int s = 0; s < R; s++)
+        {
+            int sn = (s + 1) % R;
+            int b0 = baseStart + s, b1 = baseStart + sn;
+            int t0 = tipRingStart[idx] + s, t1 = tipRingStart[idx] + sn;
+            
+            // Two triangles per quad segment
+            _tris.Add(b0); _tris.Add(b1); _tris.Add(t0);
+            _tris.Add(t0); _tris.Add(b1); _tris.Add(t1);
+        }
+    ...
+    FlushToMesh(targetMesh);
+}
+```
+
+A Rotation-Minimizing Frame or a Parallel-Transport Frame (Originally a "Bishop Frame" - ["There is More than One Way to Frame a Curve"](https://www.researchgate.net/publication/210222830_There_is_More_than_One_Way_to_Frame_a_Curve) is used to prevent twisting during rotation, ensuring trees look smoother. These "twists" would manifest as flips along branches. 
+```  
+// Rotates a normal vector from an old tangent direction to a new one, avoiding twists.
+static Vector3 ParallelTransport(Vector3 n, Vector3 from, Vector3 to)
+{
+    Vector3 axis = Vector3.Cross(from, to);
+    float sinA = axis.magnitude, cosA = Vector3.Dot(from, to);
+    if (sinA < 1e-6f) return n; // Tangents are parallel
+    return Quaternion.AngleAxis(Mathf.Atan2(sinA, cosA) * Mathf.Rad2Deg, axis / sinA) * n;
+}
+```
+
