@@ -1,4 +1,4 @@
-# Real-Time Procedural Flora Growth Using L-Systems
+# Scaling L-Systems for Real-Time Flora Growth
 
 ## Abstract
 This project extends the methods for generating flora using L-Systems as described in *The Algorithmic Beauty of Plants* by Przemyslaw Prusinkiewicz and Aristid Lindenmayer. 
