@@ -144,7 +144,7 @@ In order to simulate more advanced plants, a more advanced L-System was required
 - Making it stochastic
 - Making it parametric
 
-A stochastic L-System allows multiple branching paths for one specific rule enabling diversity withing a plant species.
+A stochastic L-System allows multiple branching paths for one specific rule enabling diversity withing a plant species.  
 An example can be seen below:
 
 ```
