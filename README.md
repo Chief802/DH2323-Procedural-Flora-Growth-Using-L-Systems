@@ -12,7 +12,8 @@ each requiring aspects such as mesh geometry, correct surface normals, and UV co
 Working around these limitations to generate flora in real-time is the primary motivator for this project.
 
 The current version of this project is described under [2026 May 1 - Animation, Structural Improvements and Performance Enhancement
-](https://github.com/Chief802/DH2323-Procedural-Flora-Growth-Using-L-Systems/edit/main/README.md#2026-may-1---animation-structural-improvements-and-performance-enhancement)
+](https://github.com/Chief802/DH2323-Procedural-Flora-Growth-Using-L-Systems#2026-may-1---animation-structural-improvements-and-performance-enhancement).  
+It is recommended to read (or skim, or to look at the pictures) through the blog up until that point however.
 
 Supervisor: [Professor and director of the Embodied Social Agents Lab (ESAL) Dr. Christopher Peters](https://www.kth.se/profile/chpeters)
 
