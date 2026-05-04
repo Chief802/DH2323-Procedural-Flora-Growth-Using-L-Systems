@@ -35,7 +35,8 @@ The feedback to the first project specification draft was returned, allowing goa
 The focus was consequently set on evaluating the algorithm and its implementation. This was investigated from the following perspectives
 - Speed, in terms of how quickly flora could be generated
 - Memory, in terms of how expensive a floral instance is
-- Realism, in terms of how well the structure of real flora is captured by the L-System
+- Realism, in terms of how well the structure of real flora is captured by the L-System  
+
 These aspects were then taken from the individual level of one plant, to investigating how scaling to many more floral instances affect them.
 
 ### 2026 April 14 \- The first plant  
